@@ -6,6 +6,8 @@ float across the screen together with wild, abstract scrolling text.
 
 Pure static web app — no build step, no dependencies.
 
+**Live demo:** https://nilsonc-hub.github.io/danmaku/ (open it on your phone or tablet and use *Add to Home Screen*).
+
 ![Sticker sheet extracted from the hand-drawn source](preview_sheet.jpg)
 
 ## Features
