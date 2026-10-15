@@ -1,7 +1,7 @@
 # danmaku — Cute Sticker Danmaku Wallpaper
 
 A colorful, interactive **danmaku (bullet-comment) wallpaper & mini-game** for phone, tablet and desktop browsers.
-It turns a sheet of hand-drawn black-and-white emoji doodles into 50+ glittery, color-shuffled stickers that
+It turns a sheet of hand-drawn black-and-white emoji doodles by **叶源源 (Ye Yuanyuan)** into 50+ glittery, color-shuffled stickers that
 float across the screen together with wild, abstract scrolling text.
 
 Pure static web app — no build step, no dependencies.
@@ -67,7 +67,7 @@ and writes ink/fill PNG pairs into `stickers/`. The loader in `app.js` picks the
 ## Credits & licensing
 
 - **Code** (`*.js`, `*.html`, `*.py`, `*.bat`): MIT License, see `LICENSE`.
-- **Sticker artwork** (`stickers/`, `preview_sheet.jpg`): hand-drawn by the original student artist, **all rights reserved**.
+- **Sticker artwork** (`stickers/`, `preview_sheet.jpg`): hand-drawn by **叶源源 (Ye Yuanyuan)**, published here with the artist's permission. **All rights reserved by the artist.**
   Please do not reuse the artwork without permission; swap in your own doodles via `extract.py` to build your own version.
 - **Fonts** in `fonts/`: ZCOOL KuaiLe, ZCOOL QingKe HuangYou, Ma Shan Zheng, Zhi Mang Xing, Liu Jian Mao Cao, Long Cang —
   all under the SIL Open Font License 1.1 (via Google Fonts).
