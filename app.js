@@ -508,70 +508,81 @@ function drawBg() {
 }
 function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 function hash(n) { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); }
-/* 画单个字：outline=深色外描边，border=白色贴纸边，fill=字色 */
-function paintChar(ch, fill, o = {}) {
-  const fs = o.fs;
-  ctx.textAlign = 'center';
-  if (o.shadow) { ctx.fillStyle = o.shadow; ctx.fillText(ch, fs * .07, fs * .09); }
-  if (o.outline) { ctx.lineWidth = fs * (o.ow || .26); ctx.strokeStyle = o.outline; ctx.strokeText(ch, 0, 0); }
-  if (o.border) { ctx.lineWidth = fs * .15; ctx.strokeStyle = o.border; ctx.strokeText(ch, 0, 0); }
-  ctx.fillStyle = fill; ctx.fillText(ch, 0, 0);
+const fontLoaded = t => !document.fonts || document.fonts.check('48px ' + t.family.split(',')[0], t.text);
+/* 把单个字烘焙成小画布（外描边 + 白边 + 填色/渐变/发光）。之后每帧只需 drawImage，比逐帧 strokeText 省很多性能 */
+function bakeGlyph(ch, w, o) {
+  const fs = o.fs, k = Math.min(DPR, 2), pad = fs * (o.glow ? .9 : .4);
+  const cw = Math.ceil(w + pad * 2), chh = Math.ceil(fs * 1.5 + pad * 2);
+  const c = mk(cw * k, chh * k), g = c.getContext('2d'); g.scale(k, k);
+  g.font = `900 ${fs}px ${o.family}, "Microsoft YaHei", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineCap = 'round';
+  const cx = cw / 2, cy = chh / 2;
+  if (o.glow) {
+    g.shadowColor = o.glow; g.shadowBlur = fs * .7; g.lineWidth = fs * .1; g.strokeStyle = o.glow; g.strokeText(ch, cx, cy); g.strokeText(ch, cx, cy);
+    g.shadowBlur = fs * .2; g.fillStyle = '#fff'; g.fillText(ch, cx, cy);
+  } else {
+    if (o.shadow) { g.fillStyle = o.shadow; g.fillText(ch, cx + fs * .07, cy + fs * .09); }
+    if (o.outline) { g.lineWidth = fs * (o.ow || .26); g.strokeStyle = o.outline; g.strokeText(ch, cx, cy); }
+    if (o.border) { g.lineWidth = fs * .15; g.strokeStyle = o.border; g.strokeText(ch, cx, cy); }
+    g.fillStyle = typeof o.fill === 'function' ? o.fill(g, cx) : o.fill; g.fillText(ch, cx, cy);
+  }
+  return { c, cw, ch: chh };
+}
+function bakeText(t) {
+  const fs = t.fs, st = t.style, DK = '#3a2a5c', family = t.family;
+  ctx.save(); ctx.font = `900 ${fs}px ${family}, "Microsoft YaHei", sans-serif`;
+  const gap = fs * .03;
+  t.widths = t.chars.map(c => ctx.measureText(c).width);
+  ctx.restore();
+  t.total = t.widths.reduce((a, b) => a + b, 0) + gap * (t.chars.length - 1);
+  let x = 0;
+  t.gl = t.chars.map((ch, i) => {
+    const w = t.widths[i], mid = x + w / 2; x += w + gap;
+    const o = { fs, family };
+    switch (st) {
+      case 'jelly': Object.assign(o, { fill: t.color, outline: DK, border: '#fff' }); break;
+      case 'wave': Object.assign(o, { fill: RAINBOW[i % 6], outline: DK, border: '#fff' }); break;
+      case 'shake': Object.assign(o, { fill: i % 2 ? '#ff2f6f' : '#ffe14a', outline: DK, border: '#fff', ow: .3 }); break;
+      case 'grad': Object.assign(o, { fill: (g, cx) => { const gr = g.createLinearGradient(cx - mid, 0, cx - mid + t.total, 0); gr.addColorStop(0, t.color); gr.addColorStop(.5, t.color2); gr.addColorStop(1, t.color3); return gr; }, outline: DK, ow: .16, shadow: 'rgba(58,42,92,.35)' }); break;
+      case 'bounce': Object.assign(o, { fill: RAINBOW[(i * 2) % 6], outline: DK, border: '#fff' }); break;
+      case 'vertical': Object.assign(o, { fill: i % 2 ? t.color : t.color2, outline: DK, border: '#fff' }); break;
+      case 'neon': Object.assign(o, { glow: t.color }); break;
+      default: Object.assign(o, { fill: t.color });   // stamp
+    }
+    return bakeGlyph(ch, w, o);
+  });
+  t.fontOk = fontLoaded(t);   // 网络字体还没加载完时用后备字体先烘焙，加载完会自动重烘焙一次
 }
 function drawTexts(back) {
   for (const t of texts) if ((t.style === 'giant') === !!back) drawText(t);
 }
 function drawText(t) {
-  const fs = t.fs, chars = t.chars, st = t.style, n = chars.length;
+  if (!t.gl || (!t.fontOk && fontLoaded(t))) bakeText(t);
+  const fs = t.fs, n = t.chars.length, st = t.style, vert = st === 'vertical', gap = fs * .03;
+  t.w = vert ? fs * 1.4 : t.total + (st === 'stamp' ? fs : 0); t.h = vert ? fs * 1.1 * n : fs * 1.3;
   ctx.save();
-  ctx.font = `900 ${fs}px ${t.family}, "Microsoft YaHei", sans-serif`;
-  ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  const widths = chars.map(c => ctx.measureText(c).width);
-  const vert = st === 'vertical', gap = fs * .03;
-  const total = widths.reduce((a, b) => a + b, 0) + gap * (n - 1);
-  t.w = vert ? fs * 1.4 : total + (st === 'stamp' ? fs : 0); t.h = vert ? fs * 1.1 * n : fs * 1.3;
   ctx.translate(t.x, t.y + Math.sin(T * 1.6 + t.ph) * fs * .08);
   ctx.rotate(t.tilt + Math.sin(T * 1.2 + t.ph) * .03 + (st === 'shake' ? (hash(Math.floor(T * 14) + t.ph) - .5) * .08 : 0));
-  const DK = '#3a2a5c';
-
   if (st === 'stamp') {   // 盖章/贴纸标签
-    ctx.fillStyle = 'rgba(255,255,255,.88)'; roundRect(ctx, -fs * .15, -fs * .7, total + fs * 1.3, fs * 1.4, fs * .3); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.88)'; roundRect(ctx, -fs * .15, -fs * .7, t.total + fs * 1.3, fs * 1.4, fs * .3); ctx.fill();
     ctx.setLineDash([fs * .22, fs * .14]); ctx.lineWidth = fs * .09; ctx.strokeStyle = t.color; ctx.stroke(); ctx.setLineDash([]);
     ctx.translate(fs * .5, 0);
   }
   if (st === 'neon') ctx.globalAlpha = (hash(Math.floor(T * 9) + t.ph) > .9) ? .55 : 1;
-  if (st === 'giant') ctx.globalAlpha = .9;
-
   let x = 0;
   for (let i = 0; i < n; i++) {
-    const ch = chars[i], w = widths[i], j = t.jit[i];
+    const w = t.widths[i], j = t.jit[i];
     let cx = x + w / 2, cy = 0, rot = 0, sc = 1;
     if (vert) { cx = Math.sin(T * 2 + i * .6) * fs * .12; cy = i * fs * 1.08; }
-    ctx.save();
     switch (st) {
       case 'jelly': cy = Math.sin(T * 3 + i * .5) * fs * .05; rot = j * .12; break;
       case 'wave': cy = Math.sin(T * 4 + i * .7) * fs * .28; rot = Math.cos(T * 4 + i * .7) * .12; break;
       case 'shake': { const sd = Math.floor(T * 16) + i * 7.3 + t.ph; cx += (hash(sd) - .5) * fs * .14; cy = (hash(sd + 3) - .5) * fs * .14; rot = (hash(sd + 9) - .5) * .4; sc = 1 + .08 * Math.sin(T * 20); break; }
       case 'bounce': { const b = Math.max(0, Math.sin(T * 5 - i * .55)); sc = 1 + .45 * b; cy = -b * fs * .22; rot = j * .15; break; }
-      case 'giant': sc = 1 + Math.sin(T * 1.4 + i) * .03; break;
       case 'vertical': rot = j * .15; break;
     }
-    ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(sc, sc);
-    switch (st) {
-      case 'jelly': paintChar(ch, t.color, { fs, outline: DK, border: '#fff' }); break;
-      case 'wave': paintChar(ch, RAINBOW[(i + Math.floor(T * 3)) % 6], { fs, outline: DK, border: '#fff' }); break;
-      case 'shake': paintChar(ch, i % 2 ? '#ff2f6f' : '#ffe14a', { fs, outline: DK, border: '#fff', ow: .3 }); break;
-      case 'giant': ctx.fillStyle = 'rgba(255,255,255,.26)'; ctx.textAlign = 'center'; ctx.fillText(ch, 0, 0); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.65)'; ctx.strokeText(ch, 0, 0); break;
-      case 'grad': {
-        const g = ctx.createLinearGradient(-cx, 0, total - cx, 0); g.addColorStop(0, t.color); g.addColorStop(.5, t.color2); g.addColorStop(1, t.color3);
-        paintChar(ch, g, { fs, outline: DK, ow: .16, shadow: 'rgba(58,42,92,.35)' }); break;
-      }
-      case 'bounce': paintChar(ch, RAINBOW[(i * 2) % 6], { fs, outline: DK, border: '#fff' }); break;
-      case 'vertical': paintChar(ch, i % 2 ? t.color : t.color2, { fs, outline: DK, border: '#fff' }); break;
-      case 'neon':
-        ctx.shadowColor = t.color; ctx.shadowBlur = fs * .7; ctx.lineWidth = fs * .1; ctx.strokeStyle = t.color; ctx.textAlign = 'center'; ctx.strokeText(ch, 0, 0); ctx.strokeText(ch, 0, 0);
-        ctx.shadowBlur = fs * .2; ctx.fillStyle = '#fff'; ctx.fillText(ch, 0, 0); break;
-      case 'stamp': ctx.textAlign = 'center'; ctx.fillStyle = t.color; ctx.fillText(ch, 0, 0); break;
-    }
+    const gph = t.gl[i];
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(sc, sc);
+    ctx.drawImage(gph.c, -gph.cw / 2, -gph.ch / 2, gph.cw, gph.ch);
     ctx.restore();
     x += w + gap;
   }
@@ -682,7 +693,7 @@ function updateProps(dt) {
 function drawProp(p) {
   const s = p.size * p.sc;
   ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.globalAlpha = Math.max(0, p.alpha);
-  ctx.shadowColor = 'rgba(90,50,140,.3)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+  if (!LOWFX()) { ctx.shadowColor = 'rgba(90,50,140,.3)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3; }
   ctx.drawImage(p.spr, -s / 2, -s / 2, s, s);
   ctx.restore();
 }
@@ -709,7 +720,16 @@ function render() {
   drawTexts(false);
   drawParts();
 }
+/* 性能自适应：持续掉帧时自动降低渲染分辨率并关闭阴影/发光（旧手机、大屏平板也能流畅） */
+let quality = 0, ftEma = .016, slowT = 0;
+const LOWFX = () => quality >= 1;
+function govern(raw) {
+  if (raw > .5) return;   // 切后台回来的大间隔不算
+  ftEma = ftEma * .92 + raw * .08;
+  if (quality < 2 && ftEma > .034) { slowT += raw; if (slowT > 2.5) { quality++; slowT = 0; ftEma = .016; resize(); } } else slowT = 0;
+}
 function loop(now) {
+  govern((now - last) / 1000 || .016);
   const dt = Math.min(.05, (now - last) / 1000 || .016); last = now;
   update(dt); render(); requestAnimationFrame(loop);
 }
@@ -810,7 +830,7 @@ function buildUI() {
 }
 
 function resize() {
-  DPR = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight;
+  DPR = Math.min(devicePixelRatio || 1, [2, 1.5, 1][quality]); W = innerWidth; H = innerHeight;
   cvs.width = W * DPR; cvs.height = H * DPR;
   stars.length = 0;
   const n = clamp(Math.round(W * H / 22000), 20, 70);
@@ -831,6 +851,7 @@ function loadImg(src) { return new Promise(res => { const i = new Image(); i.onl
   location.hash.slice(1).split(',').forEach(k => { if (THEMES[k]) S.theme = k; if (['h', 'up', 'rain', 'drift'].includes(k)) S.flow = k; if (k === 'many') { S.props = 'many'; S.txt = 'many'; } });
   buildUI(); fillEnts(true);
   if (location.hash.includes('game')) setTimeout(() => { startGame(); }, 100);
+  if (location.hash.includes('panel')) $('#panel').classList.add('open');
   { const m = location.hash.match(/music(\d)/); if (m) { Music.select(+m[1]); Music.play(); } }
   if (location.hash.includes('boom')) setTimeout(() => { shake(); for (let i = 0; i < 6; i++) summon(rnd(100, W - 100), rnd(100, H - 100), true); }, 100);
   for (let i = 0; i < 3; i++) setTimeout(() => spawnText(pick(DANMU)), i * 900);

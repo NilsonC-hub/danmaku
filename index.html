@@ -8,6 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="fonts/fonts.css">
 <title>团团表情弹幕乐园</title>
@@ -37,7 +38,7 @@
 
   /* 设置面板 */
   #panel{ position:fixed; z-index:20; right:calc(12px + env(safe-area-inset-right)); bottom:calc(76px + env(safe-area-inset-bottom));
-    width:min(340px, calc(100vw - 24px)); max-height:calc(100vh - 100px); overflow:auto;
+    width:min(340px, calc(100vw - 24px)); max-height:calc(100vh - 100px); max-height:calc(100dvh - 100px); overflow:auto;
     background:rgba(255,255,255,.88); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
     border:3px solid #fff; border-radius:26px; padding:16px 16px 12px; box-shadow:0 14px 40px rgba(120,70,170,.3);
     transform:scale(.6) translateY(40px); transform-origin:bottom right; opacity:0; pointer-events:none;
